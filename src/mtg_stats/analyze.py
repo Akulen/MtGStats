@@ -141,6 +141,7 @@ if __name__ == '__main__':
     all_data = {
         source: load_data(f'{data_folder}/{source}')
         for source in data_sources
+        if source[-5:] != '.json'
     }
 
     taxonomy = {}
