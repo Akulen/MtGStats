@@ -1,0 +1,26 @@
+[project]
+authors = [{name = "Akulen", email = "tomas@rigaux.com"}]
+dependencies = []
+name = "mtg-stats"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+mtg_stats = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+google-auth = ">=2.60.0,<3"
+google-api-python-client = ">=2.201.0,<3"
+pyyaml = ">=6.0.3,<7"
+pyecharts = ">=2.1.0,<3"
+brotli = ">=1.2.0,<2"

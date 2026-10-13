@@ -1,0 +1,49 @@
+[
+    {
+        "date": "2023-03-06",
+        "title": "Ban: Iteration, WPA"
+    },
+    {
+        "date": "2023-08-07",
+        "title": "Unban: Mind's Desire"
+    },
+    {
+        "date": "2024-05-13",
+        "title": "Ban: Stickers"
+    },
+    {
+        "date": "2024-08-26",
+        "title": "Ban: Grief"
+    },
+    {
+        "date": "2024-12-16",
+        "title": "Ban: Frog, Bauble"
+    },
+    {
+        "date": "2025-03-31",
+        "title": "Ban: Mycospawn, Troll"
+    },
+    {
+        "date": "2025-11-10",
+        "title": "Ban: Entomb, Nadu"
+    },
+    {
+        "date": "2026-03-06",
+        "title": "Release: Sewer-Veillance Cam",
+        "impacts": [
+            "Sewer-Cam Combo"
+        ]
+    },
+    {
+        "date": "2026-05-18",
+        "title": "Ban: Undercity Informer"
+    },
+    {
+        "date": "2026-06-29",
+        "title": "Ban: Candelabra"
+    },
+    {
+        "date": "2026-08-10",
+        "title": "Ban: Fantasticar"
+    }
+]
