@@ -228,6 +228,17 @@ def parse_matches(event_name, rows, subarchetype, player_decks, player_backup):
                     and {p1, p2} == {'susurrus_mtg'}:
                 p2 = 'burrarun'
                 sa2 = pa_map[p2]
+            if event_name == 'Legacy Challenge 1/8/2023' \
+                    and {p1, p2} == {'butakov'}:
+                p2 = 'mcwinsauce'
+                sa2 = pa_map[p2]
+            if event_name == 'Legacy Showcase Challenge 5/14/2023' \
+                    and {p1, p2} == {'mkc'}:
+                p2 = 'themutz'
+                sa2 = pa_map[p2]
+            if event_name == 'Legacy Challenge 12/30/2023' \
+                    and {p1, p2} == {'mephidro'}:
+                continue
             assert p1 != p2
             if sa2 not in matches[sa1]:
                 matches[sa1][sa2] = {}
@@ -264,7 +275,10 @@ RESULT_TYPO = { # Those sheets have typos in match result (e.g.: 01 vs 0-1)
     # A Bye is counted as a loss
     'Legacy Showcase Challenge 3/15/2026',
     # Wrong opponent (self match)
-    'Legacy Challenge 11/11/2023'
+    'Legacy Challenge 1/8/2023',
+    'Legacy Showcase Challenge 5/14/2023',
+    'Legacy Challenge 11/11/2023',
+    'Legacy Challenge 12/30/2023'
 }
 
 
