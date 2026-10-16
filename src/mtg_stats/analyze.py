@@ -3,26 +3,50 @@ import datetime
 import gzip
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
-import pyecharts as pc
-
-def load_data(source):
+def load_data(source: str, merge: Mapping[str, str] | None=None):
+    if merge is None:
+        merge = {}
     with open(f'{source}/taxonomy.json', 'r', encoding='UTF-8') as f:
-        taxonomy = json.load(f)
+        taxonomy = cast(Mapping[str, str], json.load(f))
     with gzip.open(
         f'{source}/all_results.json.gz', 'rt', encoding='UTF-8'
     ) as f:
-        results = json.load(f)
+        results = cast(Mapping[str, Mapping[str, list[Mapping[str, int]]]],
+            json.load(f)
+        )
+
+    tmp_tax = {}
+    for sa in taxonomy:
+        true_sa: str = merge.get(sa, sa)
+        if true_sa not in tmp_tax:
+            tmp_tax[true_sa] = taxonomy[sa]
+            continue
+        if tmp_tax[true_sa] != taxonomy[sa]:
+            print(
+                f'{sa} ({taxonomy[sa]}) cannot be merged with {true_sa} '
+              + f'({tmp_tax[true_sa]})'
+            )
+            raise Exception
+    taxonomy = tmp_tax
+
+    tmp: Mapping[str, dict[datetime.datetime, list[Mapping[str, int]]]] = {}
+    for sa in results:
+        true_sa = merge.get(sa, sa)
+        if true_sa not in tmp:
+            tmp[true_sa] = {}
+        for key in results[sa]:
+            p_key = datetime.datetime.fromisoformat(key)
+            if p_key not in tmp[true_sa]:
+                tmp[true_sa][p_key] = []
+            tmp[true_sa][p_key].extend(results[sa][key])
+
     return {
         'taxonomy': taxonomy,
-        'results': {
-            sa: {
-                datetime.datetime.fromisoformat(key): results[sa][key]
-                for key in results[sa]
-            }
-            for sa in results
-        }
+        'results': tmp
     }
 
 def process_subarchetype(name, results, taxonomy, events):
@@ -137,9 +161,13 @@ if __name__ == '__main__':
     print(args)
 
     data_folder = f'{args.data_dir}/{args.format.lower()}'
+
+    with open(f'{data_folder}/merge.json', 'r') as f:
+        merge = json.load(f)
+
     data_sources = os.listdir(data_folder)
     all_data = {
-        source: load_data(f'{data_folder}/{source}')
+        source: load_data(f'{data_folder}/{source}', merge)
         for source in data_sources
         if source[-5:] != '.json'
     }
@@ -154,7 +182,7 @@ if __name__ == '__main__':
                 taxonomy[sa] = a
     print(len(taxonomy), 'total subarchetypes')
 
-    with open('data/legacy/events.json', 'r') as f:
+    with open(f'{data_folder}/events.json', 'r') as f:
         events = json.load(f)
 
     archetypes = {}
