@@ -1,446 +1,449 @@
+/* ======================================================================
+ *  Shared helpers
+ * ==================================================================== */
+const MS2DAY = 1000 * 60 * 60 * 24;
+const CI_PER2Z = {90: 1.645};
+
 function sum(arr) {
     return arr.reduce((t, x) => t + x, 0);
 }
 function sigmoid(x) {
     return 1 / (1 + Math.exp(-x));
 }
-function betaEstimate(name, opp, data, events, d=30, gamma=0.3, k=3, z=1.645) {
-    const nWins = sum(data.map(x => x[1][0]));
-    const nLosses = sum(data.map(x => x[1][1]));
-    const avgWR = nWins / (nWins + nLosses);
-    const a0 = avgWR * k, b0 = (1 - avgWR) * k;
-    d *= 24 * 60 * 60 * 1000; // day => ms
-    var x = [], low = [], upp = [];
-    var filterEvents = [];
-    events.forEach(event => {
-        var skip = true;
-        if(event.impacts) {
-            event.impacts.forEach(deck => {
-                if(deck === name || deck == opp)
-                    skip = false;
-            });
-        } else skip = false;
-        if(!skip)
-            filterEvents.push(event);
+function eventMatters(event, decks) {
+    if(!Array.isArray(decks)) decks = [decks];
+    return !event.impacts || event.impacts.some(deck => decks.includes(deck));
+}
+
+async function fetchJSON(url) {
+    return fetch(url).then(res => {
+        if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+        return res.json();
     });
-    for(let t = Date.parse(data[0][0]); t <= Date.parse(data[data.length-1][0]); t += 24 * 60 * 60 * 1000) {
-        let W = a0, L = b0;
-        for (let i = 0; i < data.length; i++) {
-            const s = Date.parse(data[i][0]);
-            const delta = (t - s) / d;
-            let wt = Math.exp(-0.5 * delta * delta);
-            if (wt < 1e-4) continue;
-            const lo = Math.min(s, t), hi = Math.max(s, t);
-            for (const e of filterEvents) {
-                const eDate = Date.parse(e.date);
-                if (eDate > lo && eDate <= hi) {
-                    wt *= gamma;
-                }
-            }
-            W += wt * data[i][1][0];
-            L += wt * data[i][1][1];
-        }
-        x.push([t, W / (W + L)]);
-        const v = 1 / W + 0.5 / (W * W) + 1 / L + 0.5 / (L * L);
-        const se = Math.sqrt(v), c = Math.log(W / L);
-        low.push([t, sigmoid(c - z * se)]);
-        upp.push([t, sigmoid(c + z * se) - sigmoid(c - z * se)]);
-    }
-    return [x, low, upp];
 }
-function yRange(min) {
-    return function(value) {
-        const distToMin = Math.abs(0.5 - value.min);
-        const distToMax = Math.abs(0.5 - value.max);
-        const maxDistance = Math.max(distToMin, distToMax);
-        if(min)
-            return 0.5 - maxDistance * 1.0; 
-        else
-            return 0.5 + maxDistance * 1.0; 
-    }
+
+function renderPlaceholder(chartDom, title, message) {
+    const card = document.createElement('div');
+    card.classList.add('mtg-chart-card');
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    card.appendChild(heading);
+    card.insertAdjacentHTML("beforeend", `
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+             stroke="#268bd2" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" style="margin-bottom:12px; opacity:0.8;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+    `);
+    const content = document.createElement('span');
+    content.textContent = message;
+    card.append(content);
+    chartDom.appendChild(card);
 }
+
+/* ======================================================================
+ *  CHART: Win-rate
+ * ==================================================================== */
+/**
+ * Gaussian-kernel weighted Beta estimate of the win rate at every day.
+ * `data` is [[date, [wins, losses]], ...] sorted by date.
+ * Returns rows of [timestamp, winRate, lower, upper, effectiveN].
+ */
+
+
+const KERNEL_CUTOFF = Math.sqrt(2 * Math.log(1e4));
 const DEFAULT_D = 30;
-function prepareSeries(data, palette, mode, betaWindow=DEFAULT_D) {
-    var series = [
-        {
-            type: 'line',
-            data: [],
-            markLine: {
-                symbol: ['none', 'none'],
-                data: [
-                    {
-                        yAxis: 0.5,
-                        lineStyle: {
-                            type: 'dashed',
-                            color: '#999999',
-                        }
-                    }
-                ],
-                label: { show: false },
-                silent: true
-            },
+
+function betaEstimate(
+    name, opp, data, events, d=DEFAULT_D, z=1.645, gamma=0.3, k=3
+) {
+    const pts = data.map(([date, [w, l]]) => ({ t: Date.parse(date), w, l }));
+    const avgWR = sum(pts.map(p => p.w)) / sum(pts.map(p => p.w + p.l));
+    const a0 = avgWR * k, b0 = (1 - avgWR) * k;
+    const sigma = d * MS2DAY;
+    const reach = KERNEL_CUTOFF * sigma;
+    const eventTimes = events.filter(e => eventMatters(e, [name, opp]))
+                             .map(e => Date.parse(e.date));
+
+    const rows = [];
+    let first = 0;
+    for(let t = pts[0].t; t <= pts[pts.length - 1].t; t += MS2DAY) {
+        while(first < pts.length && pts[first].t < t - reach) first++;
+        let W = a0, L = b0;
+        for(let i = first; i < pts.length; i++) {
+            const p = pts[i];
+            if(p.t > t + reach) break;
+            const delta = (t - p.t) / sigma;
+            let wt = Math.exp(-0.5 * delta * delta);
+            const lo = Math.min(p.t, t), hi = Math.max(p.t, t);
+            for(const e of eventTimes) {
+                if (e > lo && e <= hi) wt *= gamma;
+            }
+            W += wt * p.w;
+            L += wt * p.l;
         }
-    ];
-    var names = [];
-    var trueCount = 0;
+        const se = Math.sqrt(1 / W + 0.5 / (W * W) + 1 / L + 0.5 / (L * L));
+        const c = Math.log(W / L);
+        rows.push([
+            t, W / (W + L), sigmoid(c - z * se), sigmoid(c + z * se), W + L - k
+        ]);
+    }
+    return rows;
+}
+
+/* Make the yaxis symmetric around 50%, with 5% snapped padding */
+function yRange(isMin) {
+    return ({ min, max }) => {
+        const dist = Math.max(0.5 - min, max - 0.5);
+        const half = Math.min(0.5, Math.ceil(dist * 1.05 / 0.05) * 0.05);
+        return isMin ? 0.5 - half : 0.5 + half;
+    }
+}
+
+const HOVER_STYLES = {
+    normal: { width: 3, lineOpacity: 1, area: 0.2, z: 2 },
+    on:     { width: 6, lineOpacity: 1, area: 0.5, z: 3 },
+    off:    { width: 1, lineOpacity: 0.3, area: 0.03, z: 2 },
+};
+const CI_PER = 90;
+
+function prepareSeries(data, palette, mode, betaWindow=DEFAULT_D) {
+    const series = [];
+    const names = [];
+    const totals = {};
     Object.entries(data.entries).toReversed().forEach(([opp, datum], i) => {
-        var entries = Object.entries(datum[mode]);
-        var [val, low, upp] = betaEstimate(data.subarchetype, opp, entries, data.events, d=betaWindow);
-        const color = palette[trueCount % palette.length];
+        const entries = Object.entries(datum[mode]);
+        const rows = betaEstimate(
+            data.subarchetype,
+            opp,
+            entries,
+            data.events,
+            betaWindow,
+            CI_PER2Z[CI_PER]
+        );
+        const color = palette[i % palette.length];
         names.push(opp);
+        totals[opp] = sum(entries.map(([, [w, l]]) => w + l));
         series.push({
+            id: `lo:${opp}`,
             type: 'line',
-            name: opp + '-lower',
-            data: low,
+            name: `${opp}-lower`,
+            data: rows.map(r => [r[0], r[2]]),
             lineStyle: { opacity: 0 },
             itemStyle: { color: 'transparent'},
-            stack: opp + 'confidence-band',
+            stack: `${opp}-confidence-band`,
             symbol: 'none',
             tooltip: { show: false },
-        });
-        series.push({
+        }, {
+            id: `hi:${opp}`,
             type: 'line',
-            name: opp + '-upper',
-            data: upp,
+            name: `${opp}-upper`,
+            data: rows.map(r => [r[0], r[3] - r[2]]),
             lineStyle: { opacity: 0 },
             itemStyle: { color: 'transparent'},
-            stack: opp + 'confidence-band',
+            stack: `${opp}-confidence-band`,
             symbol: 'none',
-            areaStyle: {
-                color: color,
-                opacity: 0.2
-            },
+            areaStyle: { color: color, opacity: HOVER_STYLES.normal.area },
             tooltip: { show: false },
-            zlevel: 0
-        });
-        series.push({
+        }, {
+            id: `wr:${opp}`,
             type: 'line',
             name: opp,
-            data: val,
+            data: rows,
             triggerLineEvent: true,
             showSymbol: false,
             color: color,
-            lineStyle: { width: 3 },
-            zlevel: 0
-        });
-        trueCount++;
-    });
-    data.events.forEach(event => {
-        var skip = true;
-        if(event.impacts) {
-            event.impacts.forEach(deck => {
-                names.forEach(name => {
-                    if(deck === name || deck == data.archetype)
-                        skip = false;
-                });
-            });
-        } else skip = false;
-        if(skip) return;
-        series.push({
-            type: 'line',
-            data: [],
-            markLine: {
-                symbol: ['none', 'none'],
-                data: [{
-                    xAxis: Date.parse(event.date),
-                    lineStyle: {
-                        type: 'dashed',
-                        color: '#999999'
-                    }
-                }],
-                label: {
-                    formatter: event.title,
-                    rotate: -90,
-                    offset: [10, 0],
-                    align: 'left'
-                },
-                silent: true
-            }
+            lineStyle: { width: HOVER_STYLES.normal.width },
+            zlevel: HOVER_STYLES.normal.z
         });
     });
-    return [series, names];
+
+    const decks = [...names, data.subarchetype];
+    const eventLines = data.events
+        .filter(e => eventMatters(e, decks))
+        .map(e => ({
+            xAxis: Date.parse(e.date),
+            label: { formatter: e.title }
+        }))
+    series.unshift({
+        id: 'referenc-lines',
+        type: 'line',
+        data: [],
+        silent: true,
+        markLine: {
+            silent: true,
+            symbol: ['none', 'none'],
+            lineStyle: { type: 'dashed', color: '#999999', },
+            label: { rotate: -90, offset: [10, 0], align: 'left' },
+            data: [{ yAxis: 0.5, label: { show: false }, }, ...eventLines],
+        },
+    })
+    return { series, names, totals };
 }
-function makeWR(dataFile, chartDom, bgColor='#1c1c23') {
-    fetch(dataFile).then(res => res.json()).then(data => {
-        const TRACK_WIDTH = 200;
-        const MIN_OFFSET = 11;
-        const MAX_D = 60;
-        const MIN_D = 7;
-        const START_SLIDER = (DEFAULT_D - MIN_D) / (MAX_D - MIN_D) * (TRACK_WIDTH - 2 * MIN_OFFSET) + MIN_OFFSET;
-        var option = {
+
+const MAX_D = 60;
+const MIN_D = 7;
+function makeWRControls(chartDom, { mode, window: win, onMode, onWindow }) {
+    const bar = document.createElement('div');
+    bar.className = 'mtg-controls';
+
+    const seg = document.createElement('div');
+    seg.className = 'mtg-seg';
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'Count wins by');
+    [
+        ['match', 'Matches', '#268bd2'],
+        ['game', 'Games', '#859900']
+    ].forEach(([value, text, color]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = text;
+        btn.style.setProperty('--c', color);
+        btn.setAttribute('aria-pressed', String(value === mode));
+        btn.addEventListener('click', () => {
+            seg.querySelectorAll('button').forEach(
+                b => { b.setAttribute('aria-pressed', String(b === btn)) }
+            );
+            onMode(value);
+        });
+        seg.appendChild(btn);
+    });
+
+    const label = document.createElement('label');
+    label.className = 'mtg-slider';
+    label.title =
+        'Standard deviation of the Gaussian kernel that weights nearby matches';
+    const caption = document.createElement('span');
+    caption.textContent = 'Smoothing';
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = MIN_D;
+    input.max = MAX_D;
+    input.step = 1;
+    input.value = win;
+    const output = document.createElement('output');
+    output.textContent = `${win} days`;
+    input.addEventListener('input', () => {
+        output.textContent = `${input.value} days`;
+        onWindow(Number(input.value));
+    });
+    label.append(caption, input, output);
+
+    bar.append(seg, label);
+    chartDom.parentNode.insertBefore(bar, chartDom);
+    return bar;
+}
+
+export function makeWR(dataFile, chartDom) {
+    fetchJSON(dataFile).then(data => {
+        const pct = p => (v => `${(v * 100).toFixed(p)}%`);
+        const dateFmt = new Intl.DateTimeFormat(
+            'en-IE', // TODO
+            {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'UTC',
+            }
+        );
+        const title = `${data.subarchetype} - Win Rates`;
+        var current = { series: [], names: [], totals: [] };
+        var currentMode = 'match';
+        var currentWindow = DEFAULT_D;
+        var hovered = null;
+
+        const option = {
+            useUTC: true,
             backgroundColor: 'transparent',
             title: {
-                top: 20,
+                top: 10,
                 left: 'center',
+                textStyle: { fontSize: 18 },
+                text: title,
             },
             xAxis: {
                 type: 'time',
                 min: 'dataMin',
                 max: 'dataMax',
-                axisLabel: {
-                    formatter: '{MMM} {yyyy}',
-                },
+                axisLabel: { formatter: '{MMM} {yyyy}', hideOverlap: true },
             },
             yAxis: {
                 type: 'value',
                 min: yRange(true),
                 max: yRange(false),
-                axisLabel: {
-                    formatter: function (value) {
-                        return Math.round(value * 100) + '%';
-                    }
-                },
+                axisLabel: { formatter: pct(0), hideOverlap: true },
             },
             tooltip: {
                 trigger: 'axis',
-                valueFormatter: function (value) {
-                    return Math.round(value * 1000) / 10 + '%';
+                confine: true,
+                // valueFormatter: pct(1),
+                formatter: params => {
+                    const rows = params
+                        .filter(p => p.seriesId?.startsWith('wr:'))
+                        .sort((a, b) => b.value[1] - a.value[1]);
+                    if(!rows.length) return '';
+                    const unit = `${currentMode}s`;
+                    const cell = '1px 0 1px 10px;';
+
+                    const date = document.createElement('div');
+                    date.style.fontWeight = 600;
+                    date.style.marginBottom = '4px';
+                    date.textContent = dateFmt.format(rows[0].value[0]);
+                    const values = document.createElement('table');
+                    values.style.borderCollapse = 'separate';
+                    values.style.borderSpacing = '10px 0px';
+                    rows.forEach(p => {
+                        const [, wr, lo, hi, n] = p.value;
+                        const row = document.createElement('tr');
+                        const d_name = document.createElement('td');
+                        d_name.innerHTML = `${p.marker}${p.seriesName}`;
+                        const d_wr = document.createElement('td');
+                        d_wr.style.padding = cell;
+                        d_wr.style.textAlign = 'right';
+                        d_wr.style.fontFamily = 'monospace';
+                        d_wr.innerHTML = `<b>${pct(1)(wr)}</b>`;
+                        const d_ci = document.createElement('td');
+                        d_ci.style.padding = cell;
+                        d_ci.style.opacity = 0.65;
+                        d_ci.style.fontFamily = 'monospace';
+                        d_ci.innerHTML = `[${pct(1)(lo)}-${pct(1)(hi)}]`;
+                        const d_n = document.createElement('td');
+                        d_n.style.padding = cell;
+                        d_n.style.opacity = 0.65;
+                        d_n.style.textAlign = 'right';
+                        d_n.style.fontFamily = 'monospace';
+                        d_n.innerHTML =
+                            `n≈${Math.round(n).toString().padStart(3)}`;
+                        row.appendChild(d_name);
+                        row.appendChild(d_wr);
+                        row.appendChild(d_ci);
+                        row.appendChild(d_n);
+                        values.appendChild(row);
+                    });
+                    const ci = document.createElement('div');
+                    ci.style.opacity = 0.55;
+                    ci.style.fontSize = '11px';
+                    ci.style.marginTop = '4px';
+                    ci.textContent =
+                        `${pct(0)(CI_PER/100)} interval · n = weighted ${unit}
+                         in the window`;
+                    return [date, values, ci];
                 }
             },
             legend: {
-                type: 'plain'
+                type: 'plain',
+                width: '80%',
+                bottom: 0,
+                formatter: name => current.totals[name] !== undefined
+                    ? `${name} (${current.totals[name]})`
+                    : name,
             },
-            graphic: [],
             series: [],
         };
-        option.title.text = data.subarchetype + ' - Win Rates';
-        var myChart = echarts.init(chartDom, 'dark');
+
+        const myChart = echarts.init(chartDom, 'dark');
         myChart.setOption(option);
-        var currentMode = 'match';
-        var [series, names] = prepareSeries(data, myChart.getOption().color, currentMode);
-        if(names.length === 0) {
+        const palette = myChart.getOption().color;
+
+        const cache = new Map();
+        function getSeries(mode, win) {
+            const key = `${mode}|${win}`;
+            let hit = cache.get(key);
+            if(hit)
+                cache.delete(key);
+            else {
+                hit = prepareSeries(data, palette, mode, win);
+                if(cache.size >= 16) cache.delete(cache.keys().next().value);
+            }
+            cache.set(key, hit);
+            return hit;
+        }
+
+        current = getSeries(currentMode, currentWindow);
+        if(current.names.length === 0) {
             myChart.dispose();
-            chartDom.innerHTML = `
-                <div style="
-                         display: flex;
-                         flex-direction: column;
-                         align-items: center; 
-                         justify-content: center; 
-                         width: 100%; 
-                         height: 100%; 
-                         color: #93a1a1; 
-                         font-family: sans-serif;
-                ">
-                    <h3 style="
-                            font-family: sans-serif;
-                            font-weight: bold;
-                            line-height: 1.2;
-                            color: #ffffff;
-                    ">` + data.subarchetype + ` - Win Rates</h3>
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#268bd2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; opacity: 0.8;">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                    </svg>
-                    <span style="font-size: 16px; font-weight: 500; letter-spacing: 0.5px;">Not enough data available</span>
-                </div>
-                `;
+            renderPlaceholder(chartDom, title, 'Not enough data available');
             return;
         }
-        var oldWindow = DEFAULT_D;
-        myChart.setOption({
-            series: series,
-            legend: { data: names },
-            graphic: [
-                {
-                    type: 'group',
-                    right: 200,
-                    top: 18,
-                    children: [
-                        {
-                            type: 'text',
-                            id: 'days-text',
-                            z: 100,
-                            top: -5,
-                            right: 10,
-                            style: {
-                                text: DEFAULT_D + ' days',
-                                fill: '#93a1a1',
-                                fontFamily: 'sans-serif',
-                                fontSize: 14,
-                                fontWeight: '500',
-                            }
-                        },
-                        {
-                            type: 'rect',
-                            top: -2,
-                            shape: { width: TRACK_WIDTH, height: 4, r: 2 },
-                            style: { fill: '#073642' }
-                        },
-                        {
-                            type: 'rect',
-                            id: 'active-slider',
-                            top: -2,
-                            shape: { width: START_SLIDER, height: 4, r: 2 },
-                            style: { fill: '#268bd2' }
-                        },
-                        {
-                            type: 'circle',
-                            x: START_SLIDER,
-                            y: 0,
-                            shape: { r: 8 },
-                            style: {
-                                fill: '#fdf6e3',
-                                stroke: '#268bd2',
-                                lineWidth: 3,
-                                shadowBlur: 6,
-                                shadowColor: 'rgba(38, 139, 210, 0.4)',
-                                shadowOffsetX: 0,
-                                shadowOffsetY: 2
-                            },
-                            draggable: 'horizontal',
 
-                            ondrag: function () {
-                                if (this.x < MIN_OFFSET) this.x = MIN_OFFSET;
-                                if (this.x > TRACK_WIDTH - MIN_OFFSET) this.x = TRACK_WIDTH - MIN_OFFSET;
-
-                                let betaWindow = (this.x - MIN_OFFSET) / (TRACK_WIDTH - 2 * MIN_OFFSET);
-                                betaWindow = Math.round(betaWindow * (MAX_D - MIN_D) + MIN_D);
-
-                                if(betaWindow == oldWindow) return;
-                                oldWindow = betaWindow;
-                                var [newSeries, names] = prepareSeries(data, myChart.getOption().color, currentMode, betaWindow);
-                                series = newSeries;
-                                myChart.setOption({
-                                    series: series,
-                                    graphic: [
-                                        {
-                                            id: 'active-slider',
-                                            shape: {
-                                                width: this.x
-                                            }
-                                        },
-                                        {
-                                            id: 'days-text',
-                                            style: {
-                                                text: betaWindow + ' days'
-                                            }
-                                        },
-                                    ]
-                                });
-                            }
-                        }
-                    ]
-                },
-                {
-                    type: 'group',
-                    id: 'toggleBtnGroup',
-                    left: 250,
-                    top: 15,
-                    width: 140,
-                    height: 35,
-                    bounding: 'raw',
-                    draggable: false,
-                    children: [
-                        {
-                            type: 'rect',
-                            id: 'btnRect',
-                            shape: {
-                                width: 140,
-                                height: 35,
-                                r: 4
-                            },
-                            style: {
-                                fill: '#268bd2',
-                                shadowBlur: 5,
-                                shadowOffsetX: 2,
-                                shadowOffsetY: 2,
-                                shadowColor: 'rgba(0,0,0,0.2)'
-                            }
-                        },
-                        {
-                            type: 'text',
-                            id: 'btnText',
-                            left: 'center',
-                            top: 'center',
-                            style: {
-                                fill: '#fdf6e3',
-                                text: 'Mode: Match',
-                                fontFamily: 'sans-serif',
-                                fontSize: 14,
-                                fontWeight: '500',
-                            }
-                        }
-                    ],
-                    onclick: function () {
-                        var graphic;
-                        if (currentMode === 'match') {
-                            currentMode = 'game';
-
-                            graphic = [
-                                { id: 'btnRect', style: { fill: '#859900' } },
-                                { id: 'btnText', style: { text: 'Mode: Game' } }
-                            ];
-                        } else {
-                            currentMode = 'match';
-
-                            graphic = [
-                                { id: 'btnRect', style: { fill: '#268bd2' } },
-                                { id: 'btnText', style: { text: 'Mode: Match' } }
-                            ];
-                        }
-                        var [newSeries, names] = prepareSeries(data, myChart.getOption().color, currentMode, oldWindow);
-                        series = newSeries;
-                        myChart.setOption({
-                            series: series,
-                            legend: { data: names },
-                            graphic: graphic
-                        });
-                    }
-                }
-            ]
-        });
-        myChart.on('legendselectchanged', function (params) {
-            const mainSeriesName = params.name;
-            const isSelected = params.selected[mainSeriesName];
-
-            const actionType = isSelected ? 'legendSelect' : 'legendUnSelect';
-
-            myChart.dispatchAction({
-                type: actionType,
-                name: `${mainSeriesName}-lower`
-            });
-
-            myChart.dispatchAction({
-                type: actionType,
-                name: `${mainSeriesName}-upper`
-            });
-        });
-        myChart.on('mouseover', { componentType: 'series', seriesType: 'line' }, function (params) {
-            if(params.componentType !== 'series') return;
-            const hoveredName = params.seriesName;
-            const allSeries = myChart.getOption().series;
-            allSeries.map(serie => {
-                if(!serie.name) return serie;
-                if(serie.name === hoveredName || serie.name.startsWith(hoveredName + '-')) {
-                    serie.lineStyle.width = 10;
-                    serie.zlevel = 1;
-                    if(serie.areaStyle)
-                        serie.areaStyle.opacity = 0.5;
-                    return serie;
-                } else {
-                    serie.lineStyle.width = 1;
-                    if(serie.areaStyle)
-                        serie.areaStyle.opacity = 0.03;
-                    return serie;
-                }
-                return {}
-            });
+        function refresh() {
+            current = getSeries(currentMode, currentWindow);
+            hovered = null;
             myChart.setOption({
-                series: allSeries,
-                tooltip: { show: false }
-            });
+                tooltip: { show: true },
+                series: current.series,
+                legend: { data: current.names },
+            }, { replaceMerge: ['series'] });
+        }
+        refresh();
+
+        makeWRControls(chartDom, {
+            mode: currentMode,
+            window: currentWindow,
+            onMode: mode => { currentMode = mode; refresh(); },
+            onWindow: (() => {
+                let frame = 0;
+                return win => {
+                    currentWindow = win;
+                    cancelAnimationFrame(frame);
+                    frame = requestAnimationFrame(refresh);
+                };
+            })(),
         });
-        myChart.on('mouseout', { componentType: 'series', seriesType: 'line' }, function (params) {
-            if(params.componentType !== 'series') return;
+
+        myChart.on('legendselectchanged', params => {
+            const type = params.selected[params.name]
+                ? 'legendSelect'
+                : 'legendUnSelect';
+            myChart.dispatchAction({ type, name: `${params.name}-lower` });
+            myChart.dispatchAction({ type, name: `${params.name}-upper` });
+        });
+
+        function styleHover(opp) {
+            if (opp === hovered) return;
+            hovered = opp;
             myChart.setOption({
-                series: series,
-                tooltip: { show: true }
+                tooltip: { show: opp === null },
+                series: current.names.flatMap(name => {
+                    const s = HOVER_STYLES[
+                        opp === null ? 'normal' : name === opp ? 'on' : 'off'
+                    ];
+                    return [
+                        { id: `wr:${name}`, z: s.z, lineStyle: {
+                            width: s.width,
+                            opacity: s.lineOpacity,
+                        } },
+                        { id: `hi:${name}`, areaStyle: { opacity: s.area } },
+                    ];
+                }),
             });
-        });
-        window.addEventListener('resize', function() {
-            myChart.resize();
-        });
+            if (opp !== null) myChart.dispatchAction({ type: 'hideTip' });
+        }
+        myChart.on('mouseover', { componentType: 'series', seriesType: 'line' },
+            params => {
+                if(current.totals[params.seriesName] !== undefined)
+                    styleHover(params.seriesName);
+            }
+        );
+        myChart.on('mouseout', { componentType: 'series', seriesType: 'line' },
+            () => styleHover(null)
+        );
+
+        function adapt() {
+            const narrow = chartDom.clientWidth < 560;
+            myChart.setOption({
+                title: { textStyle: { fontSize: narrow ? 14 : 18 } },
+                legend: { textStyle: { fontSize: narrow ? 11 : 12 } },
+            });
+        }
+        new ResizeObserver(() => { myChart.resize(); adapt(); })
+            .observe(chartDom);
+        adapt();
+    }).catch(err => {
+        console.error(err);
+        renderPlaceholder(chartDom, 'Win Rates', 'Could not load the data');
     });
 }
 
@@ -452,7 +455,13 @@ function getTodayString() {
     return `${year}-${month}-${day}`;
 };
 
-function makeCalendar(dataFile, chartDom, bgColor='#1c1c23') {
+
+/* ======================================================================
+ *  CHART: Calendar
+ * ==================================================================== */
+
+
+export function makeCalendar(dataFile, chartDom) {
     const todayStr = getTodayString();
     const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
     const blockHeight = chartDom.offsetWidth * 120 / 900;
