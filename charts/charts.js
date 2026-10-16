@@ -333,7 +333,7 @@ export function makeWR(dataFile, chartDom) {
                 }
             },
             legend: {
-                type: 'plain',
+                type: 'scroll',
                 width: '80%',
                 bottom: 0,
                 formatter: name => current.totals[name] !== undefined
