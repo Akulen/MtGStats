@@ -58,7 +58,7 @@ def process_subarchetype(name, results, taxonomy, events):
         for key in results[source][name]
     }))
     if len(dates) == 0:
-        return
+        return {}
     calendar = {
         'subarchetype': name,
         'entries': {
@@ -120,13 +120,17 @@ def process_subarchetype(name, results, taxonomy, events):
         match_count.items(), key=lambda item: item[::-1],
         reverse=True
     )[:9])
-    if name == "Sewer-Cam Combo":
-        print(match_count)
-    win_rates = {
-        opp: win_rates[opp]
-        for opp in match_count
-        if match_count[opp] > 100
-    }
+    full_wr = win_rates
+    win_rates = dict(sorted(
+        {
+            opp: win_rates[opp]
+            for opp in match_count
+            if match_count[opp] > 10
+        }.items(),
+        key=lambda item: sum(
+            sum(wl) for wl in item[1]['match'].values()
+        ),
+    ))
 
     path = Path(f'charts/data/{name}')
     path.mkdir(parents=True, exist_ok=True)
@@ -137,11 +141,9 @@ def process_subarchetype(name, results, taxonomy, events):
         json.dump({
             'subarchetype': name,
             'entries': win_rates,
-            'min': dates[0].strftime("%Y-%m-%d"),
-            'max': dates[-1].strftime("%Y-%m-%d"),
             'events': events
         }, f)
-    return
+    return full_wr
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -187,8 +189,9 @@ if __name__ == '__main__':
 
     archetypes = {}
     total_matches = 0
+    win_rates = {}
     for subarchetype, archetype in taxonomy.items():
-        process_subarchetype(
+        sa_wr = process_subarchetype(
             subarchetype,
             {
                 source: all_data[source]['results']
@@ -197,6 +200,22 @@ if __name__ == '__main__':
             taxonomy,
             events
         )
+
+        label = taxonomy[merge.get(subarchetype, subarchetype)]
+        if label not in win_rates:
+            win_rates[label] = {
+                'match': {},
+                'game': {}
+            }
+        for opp in sa_wr:
+            for tp in sa_wr[opp]:
+                for date in sa_wr[opp][tp]:
+                    # if label == 'Non Blue' and opp == 'Dimir Tempo':
+                    #     print(subarchetype, opp, tp, date, sa_wr[opp][tp][date])
+                    if date not in win_rates[label][tp]:
+                        win_rates[label][tp][date] = [0, 0]
+                    win_rates[label][tp][date][0] += sa_wr[opp][tp][date][0]
+                    win_rates[label][tp][date][1] += sa_wr[opp][tp][date][1]
 
         if archetype not in archetypes:
             archetypes[archetype] = {'sas': {}, 'n_matches': 0}
@@ -231,6 +250,27 @@ if __name__ == '__main__':
         key=lambda item: item[1]['n_matches'],
         reverse=True
     ))
+    win_rates = dict(sorted(
+        win_rates.items(),
+        key=lambda item: (
+            sum(sum(wl) for wl in item[1]['match'].values()),
+            item[0]
+        ),
+        reverse=False
+    ))
+    for arch in win_rates:
+        for tp in win_rates[arch]:
+            win_rates[arch][tp] = dict(sorted(
+                win_rates[arch][tp].items()
+            ))
 
+    path = Path(f'charts/data')
+    path.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path / 'win_rates.json.gz', 'wt', encoding='UTF-8') as f:
+        json.dump({
+            'subarchetype': 'Overall Archetypes',
+            'entries': win_rates,
+            'events': events
+        }, f)
     with open('charts/data/taxonomy.json', 'w') as f:
         json.dump(archetypes, f)

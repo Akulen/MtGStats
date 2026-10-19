@@ -57,7 +57,7 @@ const KERNEL_CUTOFF = Math.sqrt(2 * Math.log(1e4));
 const DEFAULT_D = 30;
 
 function betaEstimate(
-    name, opp, data, events, d=DEFAULT_D, z=1.645, gamma=0.3, k=3
+    name, opp, data, events, d=DEFAULT_D, estimateT=0, z=1.645, gamma=0.3, k=3
 ) {
     const pts = data.map(([date, [w, l]]) => ({ t: Date.parse(date), w, l }));
     const avgWR = sum(pts.map(p => p.w)) / sum(pts.map(p => p.w + p.l));
@@ -86,20 +86,35 @@ function betaEstimate(
         }
         const se = Math.sqrt(1 / W + 0.5 / (W * W) + 1 / L + 0.5 / (L * L));
         const c = Math.log(W / L);
-        rows.push([
-            t, W / (W + L), sigmoid(c - z * se), sigmoid(c + z * se), W + L - k
-        ]);
+        const eN = W + L - k;
+        if(eN >= estimateT)
+            rows.push([
+                t,
+                W / (W + L),
+                sigmoid(c - z * se),
+                sigmoid(c + z * se),
+                eN,
+                W / (W + L),
+            ]);
+        else
+            rows.push([
+                t, '-', '-', '-', eN, W / (W + L)
+            ]);
     }
     return rows;
 }
 
-/* Make the yaxis symmetric around 50%, with 5% snapped padding */
-function yRange(isMin) {
-    return ({ min, max }) => {
-        const dist = Math.max(0.5 - min, max - 0.5);
-        const half = Math.min(0.5, Math.ceil(dist * 1.05 / 0.05) * 0.05);
-        return isMin ? 0.5 - half : 0.5 + half;
-    }
+/* Make the yaxis symmetric around 50%, with 1% snapped padding */
+function yRange(series, selected) {
+    if(selected !== undefined && !selected) return 0;
+    const values = series.filter(
+        x => typeof x === 'number' && !Number.isNaN(x)
+    );
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const dist = Math.max(0.5 - min, max - 0.5);
+    const half = Math.min(0.5, Math.ceil(dist * 1.05 / 0.05) * 0.05);
+    return half;
 }
 
 const HOVER_STYLES = {
@@ -109,10 +124,13 @@ const HOVER_STYLES = {
 };
 const CI_PER = 90;
 
-function prepareSeries(data, palette, mode, betaWindow=DEFAULT_D) {
+function prepareSeries(
+    data, palette, mode, selected, betaWindow=DEFAULT_D, estimateT=0
+) {
     const series = [];
     const names = [];
     const totals = {};
+    const ranges = [];
     Object.entries(data.entries).toReversed().forEach(([opp, datum], i) => {
         const entries = Object.entries(datum[mode]);
         const rows = betaEstimate(
@@ -121,11 +139,13 @@ function prepareSeries(data, palette, mode, betaWindow=DEFAULT_D) {
             entries,
             data.events,
             betaWindow,
+            estimateT,
             CI_PER2Z[CI_PER]
         );
         const color = palette[i % palette.length];
         names.push(opp);
         totals[opp] = sum(entries.map(([, [w, l]]) => w + l));
+        ranges.push(yRange(rows.map(r => r[1]), selected[opp]));
         series.push({
             id: `lo:${opp}`,
             type: 'line',
@@ -180,7 +200,8 @@ function prepareSeries(data, palette, mode, betaWindow=DEFAULT_D) {
             data: [{ yAxis: 0.5, label: { show: false }, }, ...eventLines],
         },
     })
-    return { series, names, totals };
+    const range = Math.max(...ranges);
+    return { series, names, totals, range };
 }
 
 const MAX_D = 60;
@@ -236,7 +257,7 @@ function makeWRControls(chartDom, { mode, window: win, onMode, onWindow }) {
     return bar;
 }
 
-export function makeWR(dataFile, chartDom) {
+export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
     fetchJSON(dataFile).then(data => {
         const pct = p => (v => `${(v * 100).toFixed(p)}%`);
         const dateFmt = new Intl.DateTimeFormat(
@@ -253,6 +274,18 @@ export function makeWR(dataFile, chartDom) {
         var currentMode = 'match';
         var currentWindow = DEFAULT_D;
         var hovered = null;
+
+        const selected = {}
+        Object.entries(data.entries).forEach(([opp, datum]) => {
+            if(
+                sum(Object.entries(datum.match).map(([, [w, l]]) => w + l))
+                < enableT
+            ) {
+                selected[opp] = false;
+                selected[`${opp}-lower`] = false;
+                selected[`${opp}-upper`] = false;
+            }
+        });
 
         const option = {
             useUTC: true,
@@ -271,14 +304,11 @@ export function makeWR(dataFile, chartDom) {
             },
             yAxis: {
                 type: 'value',
-                min: yRange(true),
-                max: yRange(false),
                 axisLabel: { formatter: pct(0), hideOverlap: true },
             },
             tooltip: {
                 trigger: 'axis',
                 confine: true,
-                // valueFormatter: pct(1),
                 formatter: params => {
                     const rows = params
                         .filter(p => p.seriesId?.startsWith('wr:'))
@@ -295,7 +325,22 @@ export function makeWR(dataFile, chartDom) {
                     values.style.borderCollapse = 'separate';
                     values.style.borderSpacing = '10px 0px';
                     rows.forEach(p => {
-                        const [, wr, lo, hi, n] = p.value;
+                        if(hovered && hovered !== p.seriesName)
+                            return;
+                        if(hovered && hovered === p.seriesName) {
+                            const chartDom = myChart.getDom();
+                            const tooltipDom = chartDom?.lastChild;
+                            if(tooltipDom) {
+                                if(!tooltipDom.id)
+                                    tooltipDom.id = 'wr-chart-tooltip';
+                                const sB = document.createElement('style');
+                                sB.textContent = `#wr-chart-tooltip {
+                                    border-color: ${p.color} !important;
+                                }`;
+                                date.appendChild(sB);
+                            }
+                        }
+                        const [, wr, lo, hi, n, t_wr] = p.value;
                         const row = document.createElement('tr');
                         const d_name = document.createElement('td');
                         d_name.innerHTML = `${p.marker}${p.seriesName}`;
@@ -303,12 +348,16 @@ export function makeWR(dataFile, chartDom) {
                         d_wr.style.padding = cell;
                         d_wr.style.textAlign = 'right';
                         d_wr.style.fontFamily = 'monospace';
-                        d_wr.innerHTML = `<b>${pct(1)(wr)}</b>`;
+                        if(wr !== '-')
+                            d_wr.innerHTML = `<b>${pct(1)(wr)}</b>`;
+                        else
+                            d_wr.innerHTML = `<b>${pct(1)(t_wr)}</b>`;
                         const d_ci = document.createElement('td');
                         d_ci.style.padding = cell;
                         d_ci.style.opacity = 0.65;
                         d_ci.style.fontFamily = 'monospace';
-                        d_ci.innerHTML = `[${pct(1)(lo)}-${pct(1)(hi)}]`;
+                        if(wr !== '-')
+                            d_ci.innerHTML = `[${pct(1)(lo)}-${pct(1)(hi)}]`;
                         const d_n = document.createElement('td');
                         d_n.style.padding = cell;
                         d_n.style.opacity = 0.65;
@@ -339,6 +388,8 @@ export function makeWR(dataFile, chartDom) {
                 formatter: name => current.totals[name] !== undefined
                     ? `${name} (${current.totals[name]})`
                     : name,
+                triggerEvent: true,
+                selected: selected
             },
             series: [],
         };
@@ -348,13 +399,16 @@ export function makeWR(dataFile, chartDom) {
         const palette = myChart.getOption().color;
 
         const cache = new Map();
-        function getSeries(mode, win) {
+        function getSeries(mode, win, force=false) {
+            if(force) cache.clear();
             const key = `${mode}|${win}`;
             let hit = cache.get(key);
             if(hit)
                 cache.delete(key);
             else {
-                hit = prepareSeries(data, palette, mode, win);
+                hit = prepareSeries(
+                    data, palette, mode, selected, win, estimateT
+                );
                 if(cache.size >= 16) cache.delete(cache.keys().next().value);
             }
             cache.set(key, hit);
@@ -368,11 +422,12 @@ export function makeWR(dataFile, chartDom) {
             return;
         }
 
-        function refresh() {
-            current = getSeries(currentMode, currentWindow);
+        function refresh(force = false) {
+            current = getSeries(currentMode, currentWindow, force);
             hovered = null;
             myChart.setOption({
                 tooltip: { show: true },
+                yAxis: { min: 0.5 - current.range, max: 0.5 + current.range },
                 series: current.series,
                 legend: { data: current.names },
             }, { replaceMerge: ['series'] });
@@ -394,18 +449,28 @@ export function makeWR(dataFile, chartDom) {
         });
 
         myChart.on('legendselectchanged', params => {
-            const type = params.selected[params.name]
+            const state = params.selected[params.name];
+            const type = state
                 ? 'legendSelect'
                 : 'legendUnSelect';
             myChart.dispatchAction({ type, name: `${params.name}-lower` });
             myChart.dispatchAction({ type, name: `${params.name}-upper` });
+            selected[params.name] = state;
+            selected[`${params.name}-lower`] = state;
+            selected[`${params.name}-upper`] = state;
+            if(!state && hovered === params.name)
+                styleHover(null);
+            refresh(true);
+            if(state)
+                styleHover(params.name);
         });
 
         function styleHover(opp) {
-            if (opp === hovered) return;
+            if(opp !== null && current.totals[opp] === undefined) return;
+            if(opp === hovered) return;
             hovered = opp;
             myChart.setOption({
-                tooltip: { show: opp === null },
+                // tooltip: { show: opp === null },
                 series: current.names.flatMap(name => {
                     const s = HOVER_STYLES[
                         opp === null ? 'normal' : name === opp ? 'on' : 'off'
@@ -419,16 +484,27 @@ export function makeWR(dataFile, chartDom) {
                     ];
                 }),
             });
-            if (opp !== null) myChart.dispatchAction({ type: 'hideTip' });
+            if(opp !== null) myChart.dispatchAction({ type: 'hideTip' });
         }
         myChart.on('mouseover', { componentType: 'series', seriesType: 'line' },
             params => {
-                if(current.totals[params.seriesName] !== undefined)
-                    styleHover(params.seriesName);
+                styleHover(params.seriesName);
             }
         );
         myChart.on('mouseout', { componentType: 'series', seriesType: 'line' },
             () => styleHover(null)
+        );
+        myChart.on('mouseover', { componentType: 'legend', },
+            params => {
+                if(params.componentType !== 'legend') return;
+                styleHover(params.value);
+            }
+        );
+        myChart.on('mouseout', { componentType: 'legend', },
+            params => {
+                if(params.componentType !== 'legend') return;
+                styleHover(null);
+            }
         );
 
         function adapt() {
