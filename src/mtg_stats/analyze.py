@@ -49,9 +49,10 @@ def load_data(source: str, merge: Mapping[str, str] | None=None):
         'results': tmp
     }
 
+def format_date(date):
+    return date.strftime("%Y-%m-%d")
+
 def process_subarchetype(name, results, taxonomy, events):
-    if name == 'Tin Fins':
-        print(results['ldcp'].keys())
     dates = sorted(list({
         key
         for source in results if name in results[source]
@@ -59,6 +60,8 @@ def process_subarchetype(name, results, taxonomy, events):
     }))
     if len(dates) == 0:
         return {}
+    max_n_matches = 0
+    filtered_dates = []
     calendar = {
         'subarchetype': name,
         'entries': {
@@ -67,7 +70,6 @@ def process_subarchetype(name, results, taxonomy, events):
             for year in range(dates[0].year, dates[-1].year+1)
         }
     }
-    max_n_matches = 0
     for date in dates:
         n_matches = sum(
             h2h[opp][outcome]
@@ -77,17 +79,23 @@ def process_subarchetype(name, results, taxonomy, events):
             for opp in h2h
             for outcome in h2h[opp]
         )
+        if n_matches == 0:
+            continue
+        filtered_dates.append(date)
         max_n_matches = max(max_n_matches, n_matches)
         calendar['entries'][date.year].append(
             [date.strftime("%Y-%m-%d"), n_matches]
         )
+    dates = filtered_dates
+    if len(dates) == 0:
+        return {}
     calendar['max'] = max_n_matches
 
     win_rates = {}
     for date in dates:
         for source in results:
             if date not in results[source][name]: continue
-            json_date = date.strftime("%Y-%m-%d")
+            json_date = format_date(date)
             for _, h2h in results[source][name][date]:
                 for opp in h2h:
                     if name == opp: continue
@@ -190,6 +198,16 @@ if __name__ == '__main__':
     archetypes = {}
     total_matches = 0
     win_rates = {}
+    dates = sorted(list({
+        key
+        for source in all_data
+        for subarchetype in all_data[source]['results']
+        for key in all_data[source]['results'][subarchetype]
+    }))
+    matches_count = {
+        format_date(key): {}
+        for key in dates
+    }
     for subarchetype, archetype in taxonomy.items():
         sa_wr = process_subarchetype(
             subarchetype,
@@ -200,6 +218,8 @@ if __name__ == '__main__':
             taxonomy,
             events
         )
+        for date in dates:
+            matches_count[format_date(date)][subarchetype] = 0
 
         label = taxonomy[merge.get(subarchetype, subarchetype)]
         if label not in win_rates:
@@ -210,12 +230,12 @@ if __name__ == '__main__':
         for opp in sa_wr:
             for tp in sa_wr[opp]:
                 for date in sa_wr[opp][tp]:
-                    # if label == 'Non Blue' and opp == 'Dimir Tempo':
-                    #     print(subarchetype, opp, tp, date, sa_wr[opp][tp][date])
                     if date not in win_rates[label][tp]:
                         win_rates[label][tp][date] = [0, 0]
                     win_rates[label][tp][date][0] += sa_wr[opp][tp][date][0]
                     win_rates[label][tp][date][1] += sa_wr[opp][tp][date][1]
+                    if tp == 'match':
+                        matches_count[date][subarchetype] += sum(sa_wr[opp][tp][date])
 
         if archetype not in archetypes:
             archetypes[archetype] = {'sas': {}, 'n_matches': 0}
@@ -233,6 +253,16 @@ if __name__ == '__main__':
         archetypes[archetype]['sas'][subarchetype] = {
             'n_matches': n_matches
         }
+    for date in matches_count:
+        matches_count[date]['Total'] = sum(matches_count[date].values())
+    matches_count = {
+        dates: counts
+        for dates, counts in matches_count.items()
+        if counts['Total'] > 0
+    }
+
+    for sa in ['Reanimator', 'UR Delver', 'Total']:
+        print(matches_count['2023-01-01'][sa])
     for subarchetype, archetype in taxonomy.items():
         archetypes[archetype]['sas'][subarchetype]['share'] = (
             archetypes[archetype]['sas'][subarchetype]['n_matches']
@@ -270,6 +300,11 @@ if __name__ == '__main__':
         json.dump({
             'subarchetype': 'Overall Archetypes',
             'entries': win_rates,
+            'events': events
+        }, f)
+    with gzip.open(path / 'match_count.json.gz', 'wt', encoding='UTF-8') as f:
+        json.dump({
+            'counts': matches_count,
             'events': events
         }, f)
     with open('charts/data/taxonomy.json', 'w') as f:
