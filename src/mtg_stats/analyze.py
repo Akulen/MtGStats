@@ -253,16 +253,12 @@ if __name__ == '__main__':
         archetypes[archetype]['sas'][subarchetype] = {
             'n_matches': n_matches
         }
-    for date in matches_count:
-        matches_count[date]['Total'] = sum(matches_count[date].values())
     matches_count = {
         dates: counts
         for dates, counts in matches_count.items()
-        if counts['Total'] > 0
+        if sum(counts.values()) > 0
     }
 
-    for sa in ['Reanimator', 'UR Delver', 'Total']:
-        print(matches_count['2023-01-01'][sa])
     for subarchetype, archetype in taxonomy.items():
         archetypes[archetype]['sas'][subarchetype]['share'] = (
             archetypes[archetype]['sas'][subarchetype]['n_matches']
