@@ -40,7 +40,6 @@ const echarts = /** @type {any} */ (globalThis).echarts;
  *  Shared helpers
  * ==================================================================== */
 const MS2DAY = 1000 * 60 * 60 * 24;
-const CI_PER2Z = {90: 1.645, 95: 1.96 };
 
 /** @type {(arr: number[]) => number} */
 function sum(arr) {
@@ -131,7 +130,15 @@ function betaQuantile(p, a, b) {
 
         // Newton step with boundary safeguard
         const dx = err / pdf;
-        x = Math.max(1e-12, Math.min(1 - 1e-12, x - dx));
+        x = x - dx;
+        if(x <= 0) {
+            x = 1e-12;
+            break;
+        }
+        if(x >= 1) {
+            x = 1 - 1e-12;
+            break;
+        }
     }
     return x;
 }
@@ -222,13 +229,13 @@ const DEFAULT_D = 30;
  * @param {number} b0 - Failure prior
  * @param {number} first - Amount of prefix points to ignore
  * @param {number} estimateT - Threshold of minimum data before dropping
- * @param {number} z - Confidence Interval Z-score
+ * @param {number} ci - Confidence interval quantile ((0.5, 1])
  * @param {number} gamma - Event discount
  * @param {number} k - prior
  * @returns {{ first: number, row: (number | string)[] }}
  */
 function betaEstimateAt(
-    t, pts, eventTimes, reach, sigma, a0, b0, first=0, estimateT=0, z=1.645,
+    t, pts, eventTimes, reach, sigma, a0, b0, first=0, estimateT=0, ci=0.9,
     gamma=0.3, k=3
 ) {
     while(first < pts.length && pts[first].t < t - reach) first++;
@@ -250,14 +257,8 @@ function betaEstimateAt(
     let row;
 
     if(eN >= estimateT) {
-        // Map normal z-score to tail probability (e.g., z = 1.645 -> 90% CI,
-        // tails at 0.05 / 0.95) 0.5 * (1 + erf(z / sqrt(2))) approximation
-        const alphaTail = 0.5 * (1 - Math.sin(Math.min(
-            1.570796, 0.79788 * z * (1 + 0.044715 * z * z)
-        )));
-
-        const lo = betaQuantile(alphaTail, W, L);
-        const hi = betaQuantile(1 - alphaTail, W, L);
+        const lo = betaQuantile((1 - ci) / 2, W, L);
+        const hi = betaQuantile((1 + ci) / 2, W, L);
 
         row = [
             t,
@@ -282,13 +283,13 @@ function betaEstimateAt(
  * @param {Event[]} events - All events
  * @param {number} d - Receptive field in days
  * @param {number} estimateT - Threshold of minimum data before dropping
- * @param {number} z - Confidence Interval Z-score
+ * @param {number} ci - Confidence Interval quantile ((0.5, 1])
  * @param {number} gamma - Event discount
  * @param {number} k - prior
  * @returns {(number | string)[][]}
  */
 function betaEstimate(
-    name, opp, data, events, d=DEFAULT_D, estimateT=0, z=1.645, gamma=0.3, k=3
+    name, opp, data, events, d=DEFAULT_D, estimateT=0, ci=0.9, gamma=0.3, k=3
 ) {
     const pts = data.map(([date, [w, l]]) => ({ t: Date.parse(date), w, l }));
     const avgWR = sum(pts.map(p => p.w)) / sum(pts.map(p => p.w + p.l));
@@ -302,7 +303,7 @@ function betaEstimate(
     let first = 0, row;
     for(let t = pts[0].t; t <= pts[pts.length - 1].t; t += MS2DAY) {
         ({ first, row } = betaEstimateAt(
-            t, pts, eventTimes, reach, sigma, a0, b0, first, estimateT, z,
+            t, pts, eventTimes, reach, sigma, a0, b0, first, estimateT, ci,
             gamma, k
         ));
         rows.push(row);
@@ -331,7 +332,7 @@ const HOVER_STYLES = {
     on:     { width: 6, lineOpacity: 1, area: 0.3, z: 3 },
     off:    { width: 1, lineOpacity: 0.3, area: 0.03, z: 2 },
 };
-const CI_PER = 90;
+const CI = 0.9;
 
 /**
  * @param {WRData} data
@@ -363,7 +364,7 @@ function prepareSeries(
             data.events,
             betaWindow,
             estimateT,
-            CI_PER2Z[CI_PER]
+            CI
         );
         const color = palette[i % palette.length];
         names.push(opp);
@@ -652,7 +653,7 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
                     ci.style.fontSize = '11px';
                     ci.style.marginTop = '4px';
                     ci.textContent =
-                        `${pct(0)(CI_PER/100)} interval · n = weighted ${unit}
+                        `${pct(0)(CI)} interval · n = weighted ${unit}
                          in the window`;
                     return [date, values, ci];
                 }
@@ -872,7 +873,7 @@ export function getSC(dataFile, callback) {
             const avgWR = sum(pts.map(p => p.w)) / sum(pts.map(p => p.w + p.l));
             const a0 = avgWR * k, b0 = (1 - avgWR) * k;
             const { row: [, s, lo, hi, eN,]} = betaEstimateAt(
-                t, pts, eventTimes, reach, sigma, a0, b0, 0, 0, CI_PER2Z[95]
+                t, pts, eventTimes, reach, sigma, a0, b0, 0, 0, 0.95
             );
             if(typeof s === 'number')
                 totalShares += s;
