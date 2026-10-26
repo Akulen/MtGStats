@@ -127,7 +127,7 @@ def process_subarchetype(name, results, taxonomy, events):
     match_count = dict(sorted(
         match_count.items(), key=lambda item: item[::-1],
         reverse=True
-    )[:9])
+    ))
     full_wr = win_rates
     win_rates = dict(sorted(
         {
@@ -138,6 +138,7 @@ def process_subarchetype(name, results, taxonomy, events):
         key=lambda item: sum(
             sum(wl) for wl in item[1]['match'].values()
         ),
+        reverse=True
     ))
 
     path = Path(f'charts/data/{name}')
