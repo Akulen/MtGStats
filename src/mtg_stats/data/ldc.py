@@ -269,6 +269,7 @@ RESULT_TYPO = { # Those sheets have typos in match result (e.g.: 01 vs 0-1)
     'Legacy Showcase Challenge 6/8/2025',
     # Suspicious Draw
     'Legacy Showcase Challenge 2/15/2026',
+    'Legacy Challenge 32 10/25/2026',
     # A Bye is counted as a loss
     'Legacy Showcase Challenge 3/15/2026',
     # Wrong opponent (self match)
