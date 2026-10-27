@@ -19,16 +19,6 @@ const echarts = /** @type {any} */ (globalThis).echarts;
  * @property {Record<string, WREntry>} entries
  */
 
-/**
- * @typedef {Record<string, number>} SCEntry
- **/
-
-/**
- * @typedef {Object} SCData
- * @property {Event[]} events
- * @property {Record<string, SCEntry>} counts
- */
-
 /** @typedef {'match' | 'game'} ModeStr */
 
 import * as Utils from './utils.js';
@@ -79,9 +69,6 @@ function renderPlaceholder(chartDom, title, message) {
  */
 
 
-const KERNEL_CUTOFF = Math.sqrt(2 * Math.log(1e4));
-const DEFAULT_D = 30;
-
 
 /**
  * @param {string} name
@@ -96,14 +83,15 @@ const DEFAULT_D = 30;
  * @returns {(number | string)[][]}
  */
 function betaEstimate(
-    name, opp, data, events, d=DEFAULT_D, estimateT=0, ci=0.9, gamma=0.3, k=3
+    name, opp, data, events, d=Utils.DEFAULT_D, estimateT=0, ci=0.9,
+    gamma=0.3, k=3
 ) {
     const pts = data.map(([date, [w, l]]) => ({ t: Date.parse(date), w, l }));
     const avgWR = Utils.sum(pts.map(p => p.w))
                 / Utils.sum(pts.map(p => p.w + p.l));
     const a0 = avgWR * k, b0 = (1 - avgWR) * k;
     const sigma = d * Utils.MS2DAY;
-    const reach = KERNEL_CUTOFF * sigma;
+    const reach = Utils.KERNEL_CUTOFF * sigma;
     const eventTimes = events.filter(e => Utils.eventMatters(e, [name, opp]))
                              .map(e => Date.parse(e.date));
 
@@ -157,7 +145,7 @@ const CI = 0.9;
  * }}
  */
 function prepareSeries(
-    data, palette, mode, selected, betaWindow=DEFAULT_D, estimateT=0
+    data, palette, mode, selected, betaWindow=Utils.DEFAULT_D, estimateT=0
 ) {
     const series = [];
     const names = /** @type string[] */ ([]);
@@ -357,7 +345,7 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
          */
         var current;
         var currentMode = /** @type ModeStr */ ('match');
-        var currentWindow = DEFAULT_D;
+        var currentWindow = Utils.DEFAULT_D;
         var hovered = /** @type {string | null} */ (null);
 
         const selected = /** @type Record<string, boolean> */ ({});
@@ -627,79 +615,6 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
         console.error(err);
         renderPlaceholder(chartDom, 'Win Rates', 'Could not load the data');
     });
-}
-
-/* ======================================================================
- *  CHART: Win-rate
- * ==================================================================== */
-
-
-/**
- * @typedef {Record<string, {
- *     s: string | number,
- *     lo: string | number,
- *     hi: string | number,
- *     eN: string | number,
- * }>} SCReturn
- **/
-
-/**
- * @param {string} dataFile - URL to a JSON file
- * @param {(shares: SCReturn) => void} callback
- * @returns {void}
- */
-export function getSC(dataFile, callback) {
-    Utils.fetchJSON(dataFile).then(raw_data => {
-        if(raw_data.events === undefined) {
-            console.log("JSON data missing 'events' field");
-            return {};
-        }
-        if(raw_data.counts === undefined) {
-            console.log("JSON data missing 'counts' field");
-            return {};
-        }
-        const data = /** @type {SCData} */ (raw_data);
-        const date = new Date();
-        const daysUntilFriday = (7 - date.getDay() + 5) % 7;
-        date.setDate(date.getDate() + daysUntilFriday);
-        const t = Date.parse(Utils.dateToString(date));
-        const totals = Object.fromEntries(Object.entries(data.counts).map(
-            ([date, counts]) => [date, Utils.sum(Object.values(counts))]
-        ));
-        const subarchetypes = Object.values(data.counts).at(-1) || {};
-        // TODO: Couple with makeWRControls
-        const sigma = DEFAULT_D * Utils.MS2DAY;
-        const reach = KERNEL_CUTOFF * sigma;
-        const k = 3;
-        let totalShares = 0;
-        const shares = Object.keys(subarchetypes).map(sa => {
-            const eventTimes = data.events.filter(e => Utils.eventMatters(e,sa))
-                                          .map(e => Date.parse(e.date));
-            const pts = Object.entries(data.counts).map(([date, cnts]) =>
-                ({
-                    t: Date.parse(date), w: cnts[sa], l: totals[date] - cnts[sa]
-                })
-            );
-            const avgWR = Utils.sum(pts.map(p => p.w))
-                        / Utils.sum(pts.map(p => p.w + p.l));
-            const a0 = avgWR * k, b0 = (1 - avgWR) * k;
-            const { row: [, s, lo, hi, eN,]} = Utils.betaEstimateAt(
-                t, pts, eventTimes, reach, sigma, a0, b0, 0, 0, 0.95
-            );
-            if(typeof s === 'number')
-                totalShares += s;
-            return ({sa, v: { s, lo, hi, eN }});
-        });
-
-        callback(Object.fromEntries(shares.map(({sa, v: { s, lo, hi, eN }}) =>
-            [sa, {
-                s:  typeof s  === 'number' ? s  / totalShares : s,
-                lo: typeof lo === 'number' ? lo / totalShares : lo,
-                hi: typeof hi === 'number' ? hi / totalShares : hi,
-                eN: typeof eN === 'number' ? eN / totalShares : eN,
-            }]
-        )));
-    })
 }
 
 /* ======================================================================

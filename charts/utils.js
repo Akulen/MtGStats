@@ -207,3 +207,88 @@ export function betaEstimateAt(
         ];
     return { first, row };
 }
+
+/* ======================================================================
+ *  CHART: Win-rate
+ * ==================================================================== */
+
+
+export const KERNEL_CUTOFF = Math.sqrt(2 * Math.log(1e4));
+export const DEFAULT_D = 30;
+
+/**
+ * @typedef {Record<string, number>} SCEntry
+ **/
+
+/**
+ * @typedef {Object} SCData
+ * @property {Event[]} events
+ * @property {Record<string, SCEntry>} counts
+ */
+
+/**
+ * @typedef {Record<string, {
+ *     s: string | number,
+ *     lo: string | number,
+ *     hi: string | number,
+ *     eN: string | number,
+ * }>} SCReturn
+ **/
+
+/**
+ * @param {string} dataFile - URL to a JSON file
+ * @param {(shares: SCReturn) => void} callback
+ * @returns {void}
+ */
+export function getSC(dataFile, callback) {
+    fetchJSON(dataFile).then(raw_data => {
+        if(raw_data.events === undefined) {
+            console.log("JSON data missing 'events' field");
+            return {};
+        }
+        if(raw_data.counts === undefined) {
+            console.log("JSON data missing 'counts' field");
+            return {};
+        }
+        const data = /** @type {SCData} */ (raw_data);
+        const date = new Date();
+        const daysUntilFriday = (7 - date.getDay() + 5) % 7;
+        date.setDate(date.getDate() + daysUntilFriday);
+        const t = Date.parse(dateToString(date));
+        const totals = Object.fromEntries(Object.entries(data.counts).map(
+            ([date, counts]) => [date, sum(Object.values(counts))]
+        ));
+        const subarchetypes = Object.values(data.counts).at(-1) || {};
+        // TODO: Couple with makeWRControls
+        const sigma = DEFAULT_D * MS2DAY;
+        const reach = KERNEL_CUTOFF * sigma;
+        const k = 3;
+        let totalShares = 0;
+        const shares = Object.keys(subarchetypes).map(sa => {
+            const eventTimes = data.events.filter(e => eventMatters(e,sa))
+                                          .map(e => Date.parse(e.date));
+            const pts = Object.entries(data.counts).map(([date, cnts]) =>
+                ({
+                    t: Date.parse(date), w: cnts[sa], l: totals[date] - cnts[sa]
+                })
+            );
+            const avgWR = sum(pts.map(p => p.w)) / sum(pts.map(p => p.w + p.l));
+            const a0 = avgWR * k, b0 = (1 - avgWR) * k;
+            const { row: [, s, lo, hi, eN,]} = betaEstimateAt(
+                t, pts, eventTimes, reach, sigma, a0, b0, 0, 0, 0.95
+            );
+            if(typeof s === 'number')
+                totalShares += s;
+            return ({sa, v: { s, lo, hi, eN }});
+        });
+
+        callback(Object.fromEntries(shares.map(({sa, v: { s, lo, hi, eN }}) =>
+            [sa, {
+                s:  typeof s  === 'number' ? s  / totalShares : s,
+                lo: typeof lo === 'number' ? lo / totalShares : lo,
+                hi: typeof hi === 'number' ? hi / totalShares : hi,
+                eN: typeof eN === 'number' ? eN / totalShares : eN,
+            }]
+        )));
+    })
+}
