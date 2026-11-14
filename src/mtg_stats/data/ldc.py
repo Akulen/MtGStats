@@ -994,17 +994,14 @@ def collect(
     store = Store(f'{data_dir}/{config.get('format', 'legacy').lower()}/ldcp')
     drive = Drive(creds_file, log)
 
-    # all_files = list(drive.walk_tree(
-    #     config['root_folder_id'],
-    #     # Filter only year folders
-    #     filter=lambda path, name: (
-    #         (path != '' or name.isdigit()) # MTGO
-    #         or (name == 'Paper Events') # Paper
-    #     ) and name != 'Archived'
-    # ))
-    with open('all_files.pkl', 'rb') as f:
-        import pickle
-        all_files = pickle.load(f)
+    all_files = list(drive.walk_tree(
+        config['root_folder_id'],
+        # Filter only year folders
+        filter=lambda path, name: (
+            (path != '' or name.isdigit()) # MTGO
+            or (name == 'Paper Events') # Paper
+        ) and name != 'Archived'
+    ))
 
     with open(store.root / 'manual_dates.json', 'r') as f:
         MANUAL_DATES = json.load(f)
