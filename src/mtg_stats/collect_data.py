@@ -25,6 +25,14 @@ if __name__ == '__main__':
         type=int, default=None,
         help='Only process at most N events'
     )
+    parser.add_argument('--skip',
+        type=int, default=None,
+        help='Skip the first N unprocessed events'
+    )
+    parser.add_argument('--strict',
+        action='store_true',
+        help='Use strict checks'
+    )
     parser.add_argument('--data-source',
         type=str, choices=['LDCP'], default='LDCP',
         help='Which data to collect. (LDCP is the Legacy Data Collection '
@@ -38,7 +46,13 @@ if __name__ == '__main__':
 
     if args.data_source == 'LDCP':
         ldcp.collect(
-            args.data_dir, args.credentials, args.config, args.force, args.limit
+            args.data_dir,
+            args.credentials,
+            args.config,
+            args.force,
+            args.limit,
+            args.skip,
+            args.strict
         )
     else:
         raise NotImplementedError(args.data_source)

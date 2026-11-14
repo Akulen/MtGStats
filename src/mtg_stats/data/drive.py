@@ -19,7 +19,7 @@ FOLDER_MIME = 'application/vnd.google-apps.folder'
 SHORTCUT_MIME = 'application/vnd.google-apps.shortcut'
 
 QUOTAS = { #requests/min
-    'sheet': 60
+    'sheet': 60-5
 }
 
 T = TypeVar('T')
@@ -42,6 +42,9 @@ class Drive:
         self.sheets = gobuild(
             'sheets', 'v4', credentials=creds, cache_discovery=False
         )
+        for quota_type in QUOTAS:
+            for _ in range(QUOTAS[quota_type] // 2):
+                self.use_quota(quota_type)
 
     def wait_quota(self, tp: str):
         if tp not in self.requests:
@@ -75,13 +78,14 @@ class Drive:
                 if quota_type:
                     self.wait_quota(quota_type)
                 r = fun()
-                if quota_type:
-                    self.use_quota(quota_type)
                 return r
             except HttpError as e:
                 if attempt == retries - 1:
                     raise e
                 time.sleep(exp_base ** attempt)
+            finally:
+                if quota_type:
+                    self.use_quota(quota_type)
         return default
 
     def list_children(self, folder_id: str, retries: int=5):
@@ -148,9 +152,9 @@ class Drive:
     def get_sheet_values(self, sheet_id: str, tab_name: str, retries: int=5):
         def foo():
             resp = self.sheets.spreadsheets().values().get(
-                    spreadsheetId=sheet_id,
-                    range=f"'{tab_name}'",
-                    valueRenderOption='UNFORMATTED_VALUE'
+                spreadsheetId=sheet_id,
+                range=f"'{tab_name}'",
+                valueRenderOption='UNFORMATTED_VALUE'
             ).execute()
             return resp.get('values', [])
         return self.safe_query(
@@ -162,9 +166,9 @@ class Drive:
     ):
         def foo():
             resp = self.sheets.spreadsheets().values().batchGet(
-                    spreadsheetId=sheet_id,
-                    ranges=[f"'{tab_name}'" for tab_name in tab_names],
-                    valueRenderOption='UNFORMATTED_VALUE'
+                spreadsheetId=sheet_id,
+                ranges=[f"'{tab_name}'" for tab_name in tab_names],
+                valueRenderOption='UNFORMATTED_VALUE'
             ).execute()
             return [
                 tab.get('values', [])
@@ -175,15 +179,71 @@ class Drive:
         )
 
     def get_sheet(
-        self, sheet_id: str, tab_filter: List[str] | None, retries: int=5
+        self,
+        sheet_id: str,
+        tab_filter: List[str] | None,
+        retries: int=5,
+        one_by_one: bool=False,
     ):
         tabs = [
             tab
             for tab in self.get_sheet_tab_names(sheet_id, retries)
             if tab_filter is None or tab in tab_filter
         ]
-        values = self.get_sheet_tabs(sheet_id, tabs, retries)
+        if one_by_one:
+            values = []
+            for tab in tabs:
+                values.append(self.get_sheet_values(sheet_id, tab, retries))
+        else:
+            values = self.get_sheet_tabs(sheet_id, tabs, retries)
         return {
             tab: data
             for tab, data in zip(tabs, values)
         }
+
+    def get_lazy_tab(
+        self,
+        sheet_id: str,
+        tab_name: str,
+        render_option: str='FORMULA',
+        retries: int=5,
+    ):
+        return LazyTab(self, sheet_id, tab_name, render_option, retries)
+
+class LazyTab:
+    def __init__(
+        self,
+        drive_handler: Drive,
+        sheet_id: str,
+        tab_name: str,
+        render_option='FORMULA',
+        retries: int=5,
+    ):
+        self.drive_handler = drive_handler
+        self.sheet_id = sheet_id
+        self.tab_name = tab_name
+        self.render_option = render_option
+        self.retries = retries
+        self.rows = {}
+
+    def __getitem__(self, i: int | slice) -> List:
+        if i in self.rows:
+            return self.rows[i]
+        def foo():
+            selector = f'{i}:{i}'
+            if isinstance(i, slice):
+                selector = f'{i.start}:{i.stop}'
+            resp = self.drive_handler.sheets.spreadsheets().values().get(
+                spreadsheetId=self.sheet_id,
+                range=f"'{self.tab_name}'!{selector}",
+                valueRenderOption=self.render_option
+            ).execute()
+            if isinstance(i, slice):
+                return resp.get('values')
+            return resp.get('values')[0]
+        self.rows[i] = self.drive_handler.safe_query(
+            foo, default=[], quota_type='sheet', retries=self.retries
+        )
+        return self.rows[i]
+
+

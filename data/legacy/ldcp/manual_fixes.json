@@ -1,0 +1,438 @@
+{
+    "Legacy Challenge 32 10/12/2025 - 2": {
+        "inverted_result": ["lordoflifegain", "reformedpaolo"]
+    },
+    "Legacy Challenge 32 8/9/2026": {
+         "inverted_result": ["vash963", "mmapson125"]
+    },
+    "Legacy Challenge 32 9/9/2026": {
+         "inverted_result": ["freaknightmare", "blacklotusknight"]
+    },
+    "Legacy Challenge 11/11/2023": {
+        "selfplay": {
+            "susurrus_mtg": "burrarun"
+        }
+    },
+    "Legacy Challenge 1/7/2023": {
+        "bye-win swap": ["Oops All Spells"]
+    },
+    "Legacy Challenge 1/8/2023": {
+        "selfplay": {
+            "butakov": "mcwinsauce"
+        }
+    },
+    "Legacy Showcase Challenge 5/14/2023": {
+        "selfplay": {
+            "mkc": "themutz"
+        }
+    },
+    "Eternal Weekend NA Legacy 2024": {
+        "selfplay": {
+            "tmccutcheon2": "henry jaensch"
+        }
+    },
+    "Bazaar of Boxes 13": {
+        "selfplay": {
+            "stephan mons": "peter van der ham",
+            "glholmstroff": "daan jorissen"
+        }
+    },
+    "Buffalo Chicken Dip Legacy 15": {
+        "selfplay": {
+            "mason a ehrig": "tassilo grimes"
+        }
+    },
+    "DMV Legacy League Invitational": {
+        "selfplay": {
+            "jalm1": "youngtoast"
+        }
+    },
+    "Buffalo Chicken Dip Legacy 17": {
+        "selfplay": {
+            "christopher r ward": "chris schiber",
+            "corey mroz": "eric evans"
+        }
+    },
+    "Dice City Games Legacy 7K Rumble Against Cancer": {
+        "selfplay": {
+            "evan rabinowitsch": "david long"
+        }
+    },
+    "SCG Con Philadelphia Legacy 5K 3/10/2024": {
+        "selfplay": {
+            "tylerkmiec": "tyler ragels"
+        }
+    },
+    "Legacy Challenge 7/8/2023": {
+        "player_name": {
+            "s063k": "s063"
+        }
+    },
+    "Legacy Challenge 9/23/2023": {
+        "broken": "empty matchup input"
+    },
+    "Legacy Showcase Challenge 10/22/2023": {
+        "player_name": {
+            "gn42k": "gn42"
+        }
+    },
+    "Legacy Challenge 10/8/2023": {
+        "player_name": {
+            "yustani": "yasutani"
+        }
+    },
+    "Legacy Challenge 10/15/2023": {
+        "player_name": {
+            "trailovski": "trailovsky"
+        }
+    },
+    "Legacy Challenge 11/12/2023": {
+        "player_name": {
+            "42crookedsporks": "mrsporks",
+            "gn42k": "gn42"
+        }
+    },
+    "Legacy Showcase Challenge 11/26/2023": {
+        "broken": "empty matchup input"
+    },
+    "Legacy Challenge 11/25/2023": {
+        "player_name": {
+            "trailovski": "trailovsky"
+        }
+    },
+    "Legacy Challenge 12/30/2023": {
+        "broken": "Mixed up opponents (including mephidro self match)"
+    },
+    "Legacy Challenge 1/27/2024": {
+        "player_name": {
+            "i_btrue": "i_b_true",
+            "joostd b": "joostdb",
+            "j pa93": "jpa93",
+            "oceansou192": "oceansoul92",
+            "l4rsson": "l4rss0n"
+        }
+    },
+    "Legacy Showcase Challenge 1/21/2024": {
+        "player_name": {
+            "schulzcube": "schulzcubed"
+        }
+    },
+    "Legacy Challenge 1/14/2024": {
+        "player_name": {
+            "pietronel0": "pietrone10"
+        }
+    },
+    "Legacy Showcase Challenge 2/18/2024": {
+        "player_name": {
+            "ref": "reformedpaolo"
+        }
+    },
+    "Legacy Challenge 32 3/31/2024": {
+        "player_name": {
+             "mes": "mestarimatti"
+        }
+    },
+    "Legacy Challenge 3/3/2024": {
+        "player_name": {
+            "mea": "meatpop"
+        }
+    },
+    "Legacy Challenge 64 6/9/2024": {
+        "broken": "empty matchup input"
+    },
+    "Legacy Showcase Challenge 8/25/2024": {
+        "broken": "empty"
+    },
+    "Legacy Showcase Challenge 3/9/2025": {
+        "player_name": {
+            "bhowie": "dimir"
+        }
+    },
+    "Legacy Showcase Challenge 6/8/2025": {
+        "wrong_res": {
+            "45659": "1-2",
+            "45689": "2-1"
+        }
+    },
+    "Legacy Challenge 32 12/14/2025 - 2": {
+        "wrong_player_res": {
+            "runkor": [1, -1]
+        }
+    },
+    "Legacy Showcase Challenge 2/15/2026": {
+        "broken": "TODO",
+        "wrong_player_res": {
+            "misteriggins": [-2, 0],
+            "_against_": [0, -2]
+        }
+    },
+    "Legacy Showcase Challenge 3/15/2026": {
+        "wrong_player_res": {
+            "mistertwin": [0, -1],
+            "cardgameaddict": [-1, 1],
+            "davidpierceuta": [-1, 0]
+        }
+    },
+    "Legacy Challenge 32 3/1/2026 - 2": {
+        "wrong_player_res": {
+            "vash963": [1, -1],
+            "tonyscapone": [1, -1]
+        }
+    },
+    "Legacy Challenge 32 4/24/2026": {
+        "wrong_player_res": {
+            "joslam": [1, 0],
+            "venefica": [0, 1]
+        }
+    },
+    "Legacy Challenge 32 10/25/2026": {
+        "wrong_player_res": {
+            "i_b_true": [-1, 0],
+            "vouvi": [0, -1]
+        }
+    },
+    "4Seasons The Park 6/27": {
+        "broken": "Wrong old format"
+    },
+    "4Seasons Summer 9/11/22": {
+        "broken": "Wrong old format"
+    },
+    "Buffalo Chicken Dip Legacy 7/10": {
+        "broken": "Wrong old format"
+    },
+    "Eternal Rise Again 7/4": {
+        "broken": "Wrong old format"
+    },
+    "Arizona Magic Series Legacy City Champs 2021": {
+        "broken": "Wrong old format"
+    },
+    "MTGFirst Legacy 2K": {
+        "broken": "Wrong old format"
+    },
+    "Buffalo Chicken Dip Legacy 8/14": {
+        "broken": "Wrong old format"
+    },
+    "Eternal Weekend 2023 Aggregate Sheet": {
+        "broken": "Wrong old format"
+    },
+    "Eternal Weekend Combined Sheet - 2024": {
+        "broken": "Wrong old format"
+    },
+    "The Legacy Pit Open 9/18": {
+        "duplicated_players": [
+            "charles shaffer"
+        ]
+    },
+    "2022 Asia Legacy Championships 11/27": {
+        "duplicated_players": [
+            "gen shinohara"
+        ]
+    },
+    "The Legacy Pit Open II 10-1 to 10-2": {
+        "player_name": {
+            "tyler john o'brien": "tyler john obrien"
+        },
+        "wrong opponent": {
+            "damian vance": "jared cassarly"
+        }
+    },
+    "SCGCon Baltimore 5K 8/21": {
+        "player_name": {
+            "nicholas thompson": "nicholas thomspons",
+            "garreth": "garretth",
+            "anthony barbagallo": "anthony barbagello",
+            "jimb": "jim baxter"
+        }
+    },
+    "NRG Legacy Chicagoland 5k 7/31": {
+        "single_tabs": "Google Timeout"
+    },
+    "4Seasons Spring 6/5/22": {
+        "broken": "empty matchup input"
+    },
+    "SCG Con Pittsburgh 5k 5/1": {
+        "wrong_player_res": {
+            "rodney bedell": [-1, 0],
+            "evan graveno": [0, -1],
+            "miguel chavez": [1, 0],
+            "chris perciavalle": [0, 1]
+        },
+        "missing h2h": {
+            "4C Control": [
+                "Mono Green Cloudpost"
+            ],
+            "Mono Green Cloudpost": [
+                "4C Control"
+            ]
+        }
+    },
+    "SCG Con Pittsburgh 5k 4/29": {
+        "wrong_player_res": {
+            "michael mapson": [-1, 0],
+            "kevin brenneman": [0, -1]
+        }
+    },
+    "SCGCon Legacy 10K 2/13": {
+        "broken": "empty matchup input"
+    },
+    "4Seasons Autumn Main Event - 12/03/23": {
+        "broken": "missing decks"
+    },
+    "SCGCon Pittsburgh Legacy 5K 11/12/2023": {
+        "broken": "empty matchup input"
+    },
+    "Buffalo Chicken Dip Legacy Open 2 7/29/2023": {
+        "wrong_player_res": {
+            "arlin bonfiglio": [1, 0],
+            "adam wasburn-moses": [0, 1],
+            "ethan wallace": [-1, 0],
+            "cole gabel": [-1, 0],
+            "joe brennan": [0, 1],
+            "joshua godden": [-1, 0],
+            "roland chang": [0, -1],
+            "michael mapson": [1, 0],
+            "quentin sharp": [-1, 0],
+            "jt_mtg": [-1, 0],
+            "burnobongo": [0, -1],
+            "andrew mayer": [-1, 0],
+            "blakee": [0, -1],
+            "konstantin plested": [1, 0],
+            "tony morris": [0, -1],
+            "curran delahanty": [0, -1],
+            "bryan_b": [0, -1],
+            "jayjayender": [0, -1],
+            "andrew bailey": [0, 1]
+        }
+    },
+    "Impact Returns Spanish Legacy Nationals July 2023": {
+        "broken": "missing decks"
+    },
+    "Impact Returns 2023 Legacy Main event": {
+        "broken": "missing decks"
+    },
+    "Bazaar of Boxes Series 8": {
+        "wrong_player_res": {
+            "marc van der burg": [-1, 0]
+        }
+    },
+    "NRG Series 5K Chicagoland - 6/25/2023": {
+        "wrong_player_res": {
+            "lion chen": [-1, 0],
+            "jose ramos": [-1, 0],
+            "anthony bailey": [-1, 0],
+            "cryael": [-1, 0]
+        }
+    },
+    "Austrian Legacy League 2/24/2023": {
+        "taxonomy gaps": {
+            "Painter": "Permanent Combo"
+        }
+    },
+    "4 Seasons March 2023 Side Event": {
+        "broken": "missing decks"
+    },
+    "4 Seasons March 2023": {
+        "taxonomy gaps": {
+            "Painter": "Permanent Combo"
+        }
+    },
+    "Buffalo Chicken Dip Legacy 11": {
+        "taxonomy gaps": {
+            "Painter": "Permanent Combo"
+        }
+    },
+    "Bazaar of Boxes Series 6": {
+        "taxonomy gaps": {
+            "Painter": "Permanent Combo"
+        }
+    },
+    "SCGCON Legacy 10k 1/14": {
+        "taxonomy gaps": {
+            "Painter": "Permanent Combo"
+        }
+    },
+    "Eternal Weekend Europe Legacy 2024": {
+        "duplicated_players": [
+            "benjamin kobisch",
+            "michalbrodzak"
+        ],
+        "selfplay": {
+            "ilya shcherbakov": "benny1994",
+            "krzysztof kleiner": "azpeitia",
+            "clément rieutort": "siegfried spirek",
+            "lasse winther": "bjørn buntkowski"
+        },
+        "wrong_player_res": {
+            "jon robredo": [-1, 0]
+        },
+        "player_name": {
+            "niccolo": "niccolò covoni",
+            "medici": "julien medici"
+        }
+    },
+    "Eternal Weekend Asia 2024": {
+        "player_name": {
+             "eii": "eiichi arai"
+        }
+    },
+    "Bazaar of Boxes Series 10": {
+        "selfplay": {
+            "arjan boerma": "emily bierinckx"
+        },
+        "taxonomy gaps": {
+            "Reanimator": "Graveyard"
+        }
+    },
+    "SCGCon Hartford Legacy 1K 2/2/2024": {
+        "taxonomy gaps": {
+            "Reanimator": "Graveyard"
+        }
+    },
+    "Owl Central Legacy 5K 1/20/2024": {
+        "taxonomy gaps": {
+            "Unknown": "Unknown"
+        }
+    },
+    "Buffalo Chicken Dip Legacy 23": {
+        "selfplay": {
+            "ben nichols": "michael d"
+        }
+    },
+    "Buffalo Chicken Dip Legacy Open 4": {
+        "selfplay": {
+            "michael smith": "frank kimball"
+        }
+    },
+    "2025 China Legacy Championship": {
+        "selfplay": {
+            "yichenxu": "zhiruigong2020"
+        }
+    },
+    "2025 NA Eternal Weekend Legacy Champs": {
+        "player_name": {
+            "anderson  leclair": "anderson leclair"
+        }
+    },
+    "Copy of 2025 NA Eternal Weekend Legacy Champs": {
+        "broken": "duplicate"
+    },
+    "2025 NA Eternal Weekend Legacy Champs - Day 1 Only": {
+        "broken": "duplicate"
+    },
+    "2025 NA Eternal Weekend Legacy Champs - Day 2 Only": {
+        "broken": "duplicate"
+    },
+    "Legacy Challenge 32 11/6/2026": {
+        "res_typo": {
+            "erojas86": {
+                "cachorrowo": "2-1"
+            },
+            "cachorrowo": {
+                "erojas86": "1-2"
+            }
+        }
+    },
+    "Legacy Super Qualifier 12/28/2023": {
+        "broken": "TODO"
+    }
+}

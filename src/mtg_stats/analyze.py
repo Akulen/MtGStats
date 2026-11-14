@@ -283,7 +283,7 @@ if __name__ == '__main__':
             sum(sum(wl) for wl in item[1]['match'].values()),
             item[0]
         ),
-        reverse=False
+        reverse=True
     ))
     for arch in win_rates:
         for tp in win_rates[arch]:
