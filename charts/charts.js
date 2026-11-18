@@ -659,32 +659,45 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
  * ==================================================================== */
 
 
+/**
+ * @param {string} dataFile - URL to a JSON file
+ * @param {HTMLDivElement} chartDom - The <div> element in which to make the
+ *                                    chart
+ * @returns {void}
+ */
 export function makeCalendar(dataFile, chartDom) {
     const todayStr = getTodayString();
-    const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-    const blockHeight = chartDom.offsetWidth * 120 / 900;
+    const formatter = new Intl.DateTimeFormat(
+        'en-US', { month: 'short', day: 'numeric' }
+    );
+    const BASE_HEIGHT = 120;
+    const blockHeight = chartDom.offsetWidth * BASE_HEIGHT / 900;
     fetch(dataFile).then(res => res.json()).then(data => {
         var option = {
             backgroundColor: 'transparent',
             title: {
                 top: 30,
                 left: 'center',
+                text: 'Unset Title',
             },
             tooltip: {
                 trigger: 'item',
-                formatter: function (params) {
+                formatter: (/** @type Record<string, any> */ params) => {
                     const [year, month, day] = params.data[0].split('-');
-                    const dateObj = new Date(year, month - 1, day);
-                    return `${formatter.format(dateObj)}: ${params.data[1]} matches`;
+                    const date = formatter.format(
+                        new Date(year, month - 1, day)
+                    );
+                    return `${date}: ${params.data[1]} matches`;
                 }
             },
             visualMap: {
                 min: 0,
+                max: 1000,
                 type: 'continuous',
                 orient: 'horizontal',
                 top: 18,
                 left: 30,
-                itemHeight: 140,
+                itemHeight: BASE_HEIGHT + 20,
                 inRange: {
                     color: [
                         "#50a3ba",
@@ -693,7 +706,9 @@ export function makeCalendar(dataFile, chartDom) {
                     ]
                 },
             },
+            /** @type Record<string, any>[] */
             calendar: [],
+            /** @type Record<string, any>[] */
             series: []
         };
         var n_years = Object.keys(data.entries).length;
@@ -716,7 +731,7 @@ export function makeCalendar(dataFile, chartDom) {
                     fontFamily: 'Monospace',
                 },
                 monthLabel: {
-                    show: i == n_years-1,
+                    show: i === n_years-1,
                     fontFamily: 'Monospace',
                     position: 'end',
                 },
@@ -728,16 +743,20 @@ export function makeCalendar(dataFile, chartDom) {
                 data: data
             });
         });
-        chartDom.style.height = (n_years + 5 / 8) * blockHeight + 'px';
+        chartDom.style.height = `${(n_years + 5 / 8) * blockHeight} px`;
         option.visualMap.max = data.max;
-        option.title.text = data.subarchetype + ' - #Matches Played';
+        option.title.text = `${data.subarchetype} - #Matches Played`;
         option.series.push({
             type: 'custom',
             coordinateSystem: 'calendar',
             calendarIndex: 0,
-            renderItem: function (params, api) {
+            renderItem: (
+                /** @type Record<string, any> */ params,
+                /** @type Record<string, any> */ api
+            ) => {
                 const cellPoint = api.coord(todayStr);
-                if (isNaN(cellPoint[0]) || isNaN(cellPoint[1])) return;
+                if(Number.isNaN(cellPoint[0]) || Number.isNaN(cellPoint[1]))
+                    return;
 
                 const width = params.coordSys.cellWidth - 3;
                 const height = params.coordSys.cellHeight - 3;
@@ -762,7 +781,7 @@ export function makeCalendar(dataFile, chartDom) {
         });
         var myChart = echarts.init(chartDom, 'dark');
         myChart.setOption(option);
-        window.addEventListener('resize', function() {
+        window.addEventListener('resize', () => {
             myChart.resize();
         });
     });
