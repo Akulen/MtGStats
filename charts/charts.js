@@ -97,13 +97,18 @@ function betaEstimate(
 
     const rows = [];
     let first = 0, row;
-    for(let t = pts[0].t; t <= pts[pts.length - 1].t; t += Utils.MS2DAY) {
+    for(let t = pts[0].t; t <= pts[pts.length - 1].t; t += Utils.MS2DAY * 7) {
         ({ first, row } = Utils.betaEstimateAt(
             t, pts, eventTimes, reach, sigma, a0, b0, first, estimateT, ci,
             gamma, k
         ));
         rows.push(row);
     }
+    ({ first, row } = Utils.betaEstimateAt(
+        pts[pts.length - 1].t, pts, eventTimes, reach, sigma, a0, b0, first, estimateT, ci,
+        gamma, k
+    ));
+    rows.push(row);
     return rows;
 }
 
@@ -379,6 +384,29 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
                 type: 'value',
                 axisLabel: { formatter: Utils.pct(0), hideOverlap: true },
             },
+            grid: { bottom: 95 },
+            dataZoom: [
+                {
+                    id: 'zoom-inside',
+                    type: 'inside',
+                    xAxisIndex: 0,
+                    filterMode: 'none',
+                    zoomOnMouseWheel: true,
+                    moveOnMouseMove: true,
+                    moveOnMouseWheel: false,
+                    preventDefaultMouseMove: false
+                },
+                {
+                    id: 'zoom-slider',
+                    type: 'slider',
+                    xAxisIndex: 0,
+                    filterMode: 'none',
+                    bottom: 40,
+                    height: 22,
+                    showDataShadow: false,
+                    brushSelect: true,
+                }
+            ],
             tooltip: {
                 trigger: 'axis',
                 confine: true,
@@ -458,6 +486,7 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
             legend: {
                 type: 'scroll',
                 width: '80%',
+                textStyle: { lineHeight: 18 },
                 bottom: 0,
                 formatter: (/** @type string */ name) =>
                     current.totals[name] !== undefined
@@ -600,6 +629,14 @@ export function makeWR(dataFile, chartDom, enableT=0, estimateT=0) {
                 styleHover(null);
             }
         );
+
+        myChart.getZr().on('dblclick', () => {
+            myChart.dispatchAction({
+                type: 'dataZoom',
+                start: 0,
+                end: 100,
+            });
+        });
 
         function adapt() {
             const narrow = chartDom.clientWidth < 560;
