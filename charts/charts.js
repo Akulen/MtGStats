@@ -97,7 +97,7 @@ function betaEstimate(
 
     const rows = [];
     let first = 0, row;
-    for(let t = pts[0].t; t <= pts[pts.length - 1].t; t += Utils.MS2DAY * 7) {
+    for(let t = pts[0].t; t <= pts[pts.length - 1].t - Utils.MS2DAY; t += Utils.MS2DAY * 7) {
         ({ first, row } = Utils.betaEstimateAt(
             t, pts, eventTimes, reach, sigma, a0, b0, first, estimateT, ci,
             gamma, k

@@ -3,9 +3,23 @@ import datetime
 import gzip
 import json
 import os
+import math
 from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
+
+from mtg_stats.estimate import betaEstimateAt
+
+KERNEL_CUTOFF = (2 * math.log(1e4)) ** 0.5
+DEFAULT_D = 30
+S2DAY = 60 * 60 * 24;
+
+def next_day(weekday):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    days_until = (weekday - now.weekday() + 7) % 7;
+    target = now + datetime.timedelta(days=days_until)
+    target = target.replace(hour=0, minute=0, second=0, microsecond=0)
+    return target.timestamp()
 
 def load_data(source: str, merge: Mapping[str, str] | None=None):
     if merge is None:
@@ -52,14 +66,14 @@ def load_data(source: str, merge: Mapping[str, str] | None=None):
 def format_date(date):
     return date.strftime("%Y-%m-%d")
 
-def process_subarchetype(name, results, taxonomy, events):
+def process_subarchetype(name, results, taxonomy, events, display_date):
     dates = sorted(list({
         key
         for source in results if name in results[source]
         for key in results[source][name]
     }))
     if len(dates) == 0:
-        return {}
+        return {}, {}
     max_n_matches = 0
     filtered_dates = []
     calendar = {
@@ -92,10 +106,12 @@ def process_subarchetype(name, results, taxonomy, events):
     calendar['max'] = max_n_matches
 
     win_rates = {}
+    json_dates = []
     for date in dates:
+        json_date = format_date(date)
+        json_dates.append(json_date)
         for source in results:
             if date not in results[source][name]: continue
-            json_date = format_date(date)
             for _, h2h in results[source][name][date]:
                 for opp in h2h:
                     if name == opp: continue
@@ -129,6 +145,44 @@ def process_subarchetype(name, results, taxonomy, events):
         reverse=True
     ))
     full_wr = win_rates
+
+    estimated_WL = {}
+    sigma = DEFAULT_D * S2DAY;
+    reach = KERNEL_CUTOFF * sigma
+    k = 3
+    tW = sum(w for wrs in win_rates.values() for w, _ in wrs['match'].values())
+    tL = sum(l for wrs in win_rates.values() for _, l in wrs['match'].values())
+    avgWR = tW / (tW + tL)
+    a0, b0 = avgWR * k, (1 - avgWR) * k
+    for opp in win_rates:
+        event_times = [
+            datetime.datetime.strptime(event['date'], '%Y-%m-%d')
+                             .timestamp()
+            for event in events
+            if 'impacts' not in event or any(
+                deck in [name, opp]
+                for deck in event['impacts']
+            )
+        ]
+        estimated_WL[opp] = betaEstimateAt(
+            display_date,
+            [
+                {
+                    't': datetime.datetime.strptime(date, '%Y-%m-%d')
+                                          .timestamp(),
+                    'w': win_rates[opp]['match'][date][0],
+                    'l': win_rates[opp]['match'][date][1]
+                }
+                for date in json_dates
+                if date in win_rates[opp]['match']
+            ],
+            event_times,
+            reach,
+            sigma,
+            a0,
+            b0
+        )
+
     win_rates = dict(sorted(
         {
             opp: win_rates[opp]
@@ -152,7 +206,7 @@ def process_subarchetype(name, results, taxonomy, events):
             'entries': win_rates,
             'events': events
         }, f)
-    return full_wr
+    return full_wr, estimated_WL
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -209,16 +263,20 @@ if __name__ == '__main__':
         format_date(key): {}
         for key in dates
     }
+    display_date = next_day(4)
+    estimated_WL = {}
     for subarchetype, archetype in taxonomy.items():
-        sa_wr = process_subarchetype(
+        sa_wr, eWL = process_subarchetype(
             subarchetype,
             {
                 source: all_data[source]['results']
                 for source in all_data
             },
             taxonomy,
-            events
+            events,
+            display_date
         )
+        estimated_WL[subarchetype] = eWL
         for date in dates:
             matches_count[format_date(date)][subarchetype] = 0
 
@@ -236,7 +294,9 @@ if __name__ == '__main__':
                     win_rates[label][tp][date][0] += sa_wr[opp][tp][date][0]
                     win_rates[label][tp][date][1] += sa_wr[opp][tp][date][1]
                     if tp == 'match':
-                        matches_count[date][subarchetype] += sum(sa_wr[opp][tp][date])
+                        matches_count[date][subarchetype] += sum(
+                            sa_wr[opp][tp][date]
+                        )
 
         if archetype not in archetypes:
             archetypes[archetype] = {'sas': {}, 'n_matches': 0}
@@ -302,6 +362,7 @@ if __name__ == '__main__':
     with gzip.open(path / 'match_count.json.gz', 'wt', encoding='UTF-8') as f:
         json.dump({
             'counts': matches_count,
+            'estimates': estimated_WL,
             'events': events
         }, f)
     with open('charts/data/taxonomy.json', 'w') as f:
